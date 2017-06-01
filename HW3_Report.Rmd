@@ -1,0 +1,30 @@
+---
+title: "ISYE6501 HW2"
+author: "Keh-Harng Feng"
+date: "May 29, 2017"
+output: 
+  bookdown::pdf_book:
+    fig_caption: TRUE
+    toc: FALSE
+urlcolor: blue
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, tidy = TRUE, cache = TRUE)
+options(digits = 4)
+```
+
+## Preface
+This is a reproducible report with most of the codes doing the heavy lifting hidden in the background. **All codes are available to be audited.** If you wish to check the various scripts and code snippets used for the computations, you can download the source code of the report by [clicking here](). However, as a general rule of thumb you should NOT run any downloaded R scripts from an untrusted source on your computer without understanding the source code first.
+
+# Question 1
+**Describe a situation or problem from your job, everyday life, current events, etc., for which exponential smoothing would be appropriate. What data would you need? Would you expect the value of $\alpha$ (the first smoothing parameter) to be closer to 0 or 1, and why?**
+
+I worked on a computer model that simulates the transfer of radiation through the atmosphere. Clearly the amount of radiation that reaches the surface will depend on things such as the incident angle and the amount of radiation that reaches the top of the atmosphere. The current incident angle can be computed based on the orbital characteristics between the Earth and the Sun. However, the exact amount of energy outputted by the sun is highly dependent on solar activities and is not a simple task to model using physics. If data is lacking for a particular period of interest we can use exponential smoothing to produce an estimation. 
+
+Data required would be the measured top of the atmosphere solar irradiance in $W/m^2$ set at a reference distance at a fixed time step size. Note that the Earth's orbit is not circular and thus the distance between the Earth and the Sun will change constantly. However it is very easy to work backwards to compute the irradiance at a reference distance by knowing the exact spot Earth and the satellite are at currently and assuming isotropic radiation from the Sun. 
+
+Judging by [this chart](https://smd-prod.s3.amazonaws.com/science-red/s3fs-public/mnt/medialibrary/2013/01/08/tsi_composite_strip.jpg) there is some form of seasonality on the time scale of decades. If data is measured monthly it would be best to set $\alpha$ to a  small number since the time scale that is really of interest is much larger than the time step.
+
+# Question 2
+
+# Question 3
