@@ -1,9 +1,9 @@
 ---
-title: "ISYE6501 HW2"
+title: "ISYE6501 HW3"
 author: "Keh-Harng Feng"
 date: "May 29, 2017"
 output: 
-  bookdown::pdf_book:
+  bookdown::html_document2:
     fig_caption: TRUE
     toc: FALSE
 urlcolor: blue
@@ -14,6 +14,8 @@ options(digits = 4)
 
 library('caret')
 library('corrplot')
+library('reshape2')
+library('gtools')
 ```
 
 ## Preface
@@ -54,15 +56,97 @@ Hypothesis test carried out on model coefficients showed that transmission is NO
 
 **Show your model (factors used and their coefficients), the software output, and the quality of fit.**
 
-## Data Preprocess
+## Data Preprocess & Exploratory Analysis
 
 TODO: Strategy -- show there are no near zero variance predictors. Show pair matrix plot. Show strong correlation between P01 and P02 using corrPlot. Use findCorrelation to identify P01 as the predictor to be removed (reference Kuhn for algorithm). 
 
 Scale & center.
 
-## Feature Selection
+The data is loaded with header. The first 5 rows are shown below:
 
-Split preprocessed data into test & training.
+```{r}
+if (!file.exists('uscrime.txt')) {
+    download.file('http://www.statsci.org/data/general/uscrime.txt', destfile = 'uscrime.txt')
+}
+
+q5_data <- read.table('uscrime.txt', header = TRUE)
+
+head(q5_data)
+
+q5_data$So <- as.factor(q5_data$So)
+
+data.predictors <- q5_data[,!(names(q5_data) %in% c('Crime'))]
+```
+
+The 16th column `Crime` is the response. The second column `So` is a categorical variable with two levels `0` and `1`. A quick check shows that no predictors exhibit near zero variance:
+
+```{r, echo = TRUE}
+nzv <- nearZeroVar(data.predictors, saveMetrics = TRUE)
+nzv
+```
+
+Figure \@ref(fig:pairsplot) shows the Pair-wise scatter plots between all predictors. There seems to be colinearity between `Po1` and `Po2`. Some other predictor pairs are also suspect such as `Ed` and `Wealth`, `Wealth` and `Ineq`, `Po1` and `Wealth`, and finally `Po2` and `Wealth`. A plot of the correlations between all *non-categorical* predictors is shown in Figure \@ref(fig:corrplot).
+
+```{r pairsplot, fig.cap = 'Pair scatterplot matrix of all the predictors. Matrix is symmetric by design.'}
+
+pairs(data.predictors)
+
+```
+
+
+```{r corrplot, fig.cap = 'Cluster plot of the correlation matrix. Matrix is symmetric by design.'}
+data.noncat <- data.predictors[,!(names(data.predictors) %in% c('So'))]
+corrmat <- correlations <- cor(data.noncat)
+
+corrplot(corrmat, order = 'hclust')
+```
+
+As suspected, Figure \@ref(fig:corrplot) shows strong correlations between (`Po1`, `Po2`), (`Ineq`, `Wealth`) and (`Ineq`, `Ed`). The following algorithm described by Kuhn and Johnson in [Applied Predictive Modeling](appliedpredictivemodeling.com) in the form of the `findCorrelations()` function from the `caret` package is used to identify highly colinear predictors to be removed:
+
+> 1. Calculate the correlation matrix.
+> 2. Determine the two predictors associated with the largest absolute parwise correlations, (A, B).
+> 3. Determine the average correlation between A and other predictors. Do the same for B.
+> 4. Remove the predictor with larger average correlation.
+> 5. Repeat 2 - 4 until no correlations are above the threshold.
+
+For this step the threshold value is set to the default value, 0.9. The algorithm found the following predictor(s) to be removed due to colinearity:
+
+```{r}
+tbr <- findCorrelation(corrmat, names = TRUE)
+tbr
+```
+
+Since the question does not require us to interpret the model based on model coefficients, data transformation, scaling and centering are viable options. A list of density plots are shown in Figure \@ref(fig:untransformed)
+
+```{r untransformed, fig.cap = 'Density plots of untransformed predictors.'}
+melted.noncat <- melt(data.noncat[,!(names(data.noncat) %in% c('So', tbr))])
+
+densityplot(~value|variable, data = melted.noncat, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
+```
+
+Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. The predictors are transformed using Box-Cox transformation then centered and scaled in an attempt to fix this. The result of the transformation is shown in Figure \@ref(fig:transformed).
+
+```{r transformed, fig.cap = 'Transformed predictor density plots. Transformations applied: center, scale and Yeo-Johnson (plus removal of highly colinear predictor).}
+#data.dummy <- as.data.frame(cbind(model.matrix(Crime ~ ., data = q5_data), Crime = q5_data$Crime))
+
+#data.dummy <- as.data.frame(model.matrix(Crime ~ ., data = q5_data))
+
+preproc <- preProcess(data.noncat, method = c('center', 'scale', 'BoxCox', 'corr'))
+
+data.processed <- predict(preproc, data.noncat)
+
+melted.processed <- melt(data.processed)
+densityplot(~value|variable, data = melted.processed, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
+```
+
+With the exception of `M.F` the improvement to the predictor distribution is quite remarkable. This set of transformations shall be used prior to automatic feature selection with the addition of the categorical predictor `So`.
+
+## Algorithmic Feature Selection
+```{r}
+var_combo <- permutations(2, 14, v = c('TRUE', 'FALSE'), repeats.allowed = TRUE)
+```
+
+The preprocessed data is now split into a test & training set. With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo)`. An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
 
 Using training set:
 Iterate through all predictor combinations. Each iteration: estimate out-of-sample performance using 10-fold cross validation (sample size too small?) and MSE? Or use AIC?
