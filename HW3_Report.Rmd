@@ -143,15 +143,10 @@ With the exception of `M.F` the improvement to the predictor distribution is qui
 
 ## Algorithmic Feature Selection
 ```{r}
-var_combo <- permutations(2, 14, v = c('TRUE', 'FALSE'), repeats.allowed = TRUE)
+var_combo <- permutations(2, 14, v = c('TRUE', 'FALSE'), repeats.allowed = TRUE)[-1,]
 ```
 
-The preprocessed data is now split into a test & training set. With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo)`. An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
-
-Using training set:
-Iterate through all predictor combinations. Each iteration: estimate out-of-sample performance using 10-fold cross validation (sample size too small?) and MSE? Or use AIC?
-
-Choose best combination. 
+The preprocessed data is now split into a test & training set. With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo) - 1` (the trivial combination where no predictor is selected is not included). An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
 
 ## Performance Evaluation
 
