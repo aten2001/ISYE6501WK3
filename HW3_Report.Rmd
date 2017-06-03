@@ -9,13 +9,14 @@ output:
 urlcolor: blue
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, tidy = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, tidy = TRUE, cache = TRUE)
 options(digits = 4)
 
 library('caret')
 library('corrplot')
 library('reshape2')
 library('gtools')
+library('parallel')
 ```
 
 ## Preface
@@ -119,14 +120,16 @@ tbr
 Since the question does not require us to interpret the model based on model coefficients, data transformation, scaling and centering are viable options. A list of density plots are shown in Figure \@ref(fig:untransformed)
 
 ```{r untransformed, fig.cap = 'Density plots of untransformed predictors.'}
-melted.noncat <- melt(data.noncat[,!(names(data.noncat) %in% c('So', tbr))])
+melted.noncat <- melt(data.noncat[,!(names(data.noncat) %in% c(tbr))])
 
 densityplot(~value|variable, data = melted.noncat, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
 ```
 
-Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. The predictors are transformed using Box-Cox transformation then centered and scaled in an attempt to fix this. The result of the transformation is shown in Figure \@ref(fig:transformed).
+Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. The predictors are transformed using Box-Cox transformation then centered and scaled[^1] in an attempt to fix this. The result of the transformation is shown in Figure \@ref(fig:transformed).
 
-```{r transformed, fig.cap = 'Transformed predictor density plots. Transformations applied: center, scale and Yeo-Johnson (plus removal of highly colinear predictor).}
+[^1]: It is my belief that the order of transformation is correlation removal -> Box-Cox -> center/scale (either one can go first). The key here is that Box-Cox **must** be carried out before centering and scaling because it involves the possibility of raising the predictors to negative powers. If you center and scale first you can run into division by 0 even if the predictor doesn't originally contain 0. If the predictor already has 0 you cannot use Box-Cox transformation.
+
+```{r transformed, fig.cap = 'Transformed predictor density plots. Transformations applied: center, scale and Yeo-Johnson (plus removal of highly colinear predictor).'}
 #data.dummy <- as.data.frame(cbind(model.matrix(Crime ~ ., data = q5_data), Crime = q5_data$Crime))
 
 #data.dummy <- as.data.frame(model.matrix(Crime ~ ., data = q5_data))
@@ -139,14 +142,88 @@ melted.processed <- melt(data.processed)
 densityplot(~value|variable, data = melted.processed, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
 ```
 
-With the exception of `M.F` the improvement to the predictor distribution is quite remarkable. This set of transformations shall be used prior to automatic feature selection with the addition of the categorical predictor `So`.
+With the exception of `M.F` the improvement to the predictor distribution is quite remarkable. This set of transformations shall be used with the addition of the categorical predictor `So` prior to automatic feature selection.
 
-## Algorithmic Feature Selection
-```{r}
-var_combo <- permutations(2, 14, v = c('TRUE', 'FALSE'), repeats.allowed = TRUE)[-1,]
+## Automatic Feature Selection
+```{r feature-select}
+var_combo <- permutations(2, 14, v = c(TRUE, FALSE), repeats.allowed = TRUE)[-1,]
+
+combo_list <- as.list(as.data.frame(t(var_combo)))
+
+#mse_est <- rep(0, length(var_combo))
+
+n <- nrow(q5_data)
+
+inTrain <- sample(1:n, size = ceiling(n*0.9))
+
+# Include So in processed predictors.
+data.processed <- data.frame(data.processed, So = data.predictors$So)
+
+# Include Response with processed predictors.
+all.processed <- data.frame(data.processed, Crime = q5_data$Crime)
+
+# Training set
+data.training <- all.processed[inTrain,]
+
+# Test set
+data.test <- all.processed[-inTrain,]
+
+# 10-fold index (index of elements IN the fold)
+folds <- createFolds(data.training$Crime)
+
+varnames <- names(data.training)[1:14]
+
+cv_mse <- function(var_combination, data, variables, folds) {
+    formula = as.formula(paste('Crime ~ ', paste(variables[var_combination], collapse = ' + '), sep = ''))
+    
+    combo_mse <- rep(0, 10)
+    
+    for (fold_ind in 1:10) {
+        training <- data[-folds[[fold_ind]],]
+        validation <- data[folds[[fold_ind]],]
+        
+        model <- lm(formula, data = training)
+        
+        pred <- predict(model, validation[, !(names(validation) %in% c('Crime'))])
+        
+        combo_mse[fold_ind] <- ModelMetrics::mse(validation$Crime, pred)
+    }
+    
+    return(mean(combo_mse))
+}
+# Set up parallel processing clusters
+cl <- makePSOCKcluster(4)
+
+mse_est <- parSapply(cl = cl, X = combo_list, FUN = cv_mse, data = data.training, variables = varnames, folds = folds)
+
+stopCluster(cl)
+# for (comb_ind in 1:length(var_combo)) {
+#     formula = as.formula(paste('Crime ~ ', paste(varnames[var_combo[comb_ind,]], collapse = ' + '), sep = ''))
+#     
+#     
+#     combo_mse <- rep(0, 10)
+#     for (fold_ind in 1:10) {
+#         training <- data.training[-folds[[fold_ind]],]
+#         validation <- data.training[folds[[fold_ind]],]
+#         
+#         model <- lm(formula, data = training)
+#         
+#         pred <- predict(model, validation[, !(names(validation) %in% c('Crime'))])
+#         
+#         combo_mse[fold_ind] <- mse(validation$Crime, pred)
+#     }
+#     
+#     mse_est[comb_ind] <- mean(combo_mse)
+# }
+
+min_ind <- which.min(mse_est)
+
+mse_est[min_ind]
+names(data.training)[var_combo[min_ind,]]
+
 ```
 
-The preprocessed data is now split into a test & training set. With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo) - 1` (the trivial combination where no predictor is selected is not included). An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
+The preprocessed data is now split into a test (~10%) & training set (~90%). With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo) - 1` (the trivial combination where no predictor is selected is not included). An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
 
 ## Performance Evaluation
 
