@@ -145,7 +145,7 @@ data.es <- es(data.ts, model = 'AAA')
 persistence <- data.es$persistence
 ```
 
-Since there isn't any discernible ampltitude change in Figure \@ref(ref:atlanta), an additive model is chosen for the seasonality component. An AAA triple smoothing model is constructed on the actual temperature data. The smoothing parameters are $\alpha$ = $`r persistence[1]`$, $\beta$ = $`r persistence[2]`$, $\gamma$ = $`r persistence[3]`$. Figure \@(ref:tempscomp) shows the time series components. 
+Since there isn't any discernible ampltitude change in Figure \@ref(fig:atlanta), an additive model is chosen for the seasonality component. An AAA triple smoothing model is constructed on the actual temperature data. The smoothing parameters are $\alpha$ = $`r persistence[1]`$, $\beta$ = $`r persistence[2]`$, $\gamma$ = $`r persistence[3]`$. Figure \@(ref:tempscomp) shows the time series components. 
 
 ```{r tempscomp, fig.cap = 'Time series components of Atlanta summer temperatures.'}
 plot(data.es$states, main = 'Time Series Components', xlab = 'Time Index')
