@@ -46,8 +46,8 @@ data.ts <- ts(data.long[,2], frequency = 123)
 
 The original data consists of recorded daily temperatures from July 1 to October 31 from the year 1996 to 2015. Each year is separated into a different column and each row represents measurement from a particular day in a particular month. This results in 123 measurements for each annual observation. The original data is thus melted into a long format and converted to a time-series with a frequency of 123 measurements per observation. The time series is shown in Figure \@ref(fig:atlanta)
 
-```{r atlanta, fig.cap = 'Summer Temperature in Atlanta from 1996 to 2015'}
-plot(data.ts, title = 'Atlanta Summer Temperature (1996 - 2015)', xlab = 'Days Since June 30', ylab = 'Temperature (F)')
+```{r atlanta, fig.cap = 'Summer Temperature in Atlanta. Each cycle represents data collected during all the summer months of a year (1996 - 2015).'}
+plot(data.ts, title = 'Atlanta Summer Temperature (1996 - 2015)', xlab = 'Index', ylab = 'Temperature (F)')
 ```
 
 ## Study using Simulated Data
@@ -133,7 +133,7 @@ persistence3 <- trend.es$persistence
 
 Figure \@ref(fig:trendonly) shows the model components on where there is a positive trend but no seasonality (scroll UP after clicking the reference link). The smoothing parameters are $\alpha$ = $`r persistence1[1]`$, $\beta$ = $`r persistence1[2]`$, $\gamma$ = $`r persistence1[3]`$. Interestingly, the AAA model failed to decompose the linear trend into the trend component. Instead it is reflected in the time series level (the moving average). 
 
-Figure \@ref(fig:trendseason) shows the component plot for a series with both trend and season. Once again. Trend is picked up by the moving average level. Seasonality is correctly decomposed however. The smoothing parameters are $\alpha$ = $`r persistence2[1]`$, $\beta$ = $`r persistence2[2]`$, $\gamma$ = $`r persistence2[3]`$.
+Figure \@ref(fig:trendseason) shows the component plot for a series with both trend and season. Once again. Trend is picked up by the moving average level. Seasonality is correctly decomposed however. The smoothing parameters are $\alpha$ = $`r persistence2[1]`$, $\beta$ = $`r persistence2[2]`$, $\gamma$ = $`r persistence2[3]`$. With $\gamma$ = 0 the seasonality component is completely stationary and each of its cycle is completely identical to all other cycles.
 
 Finally, Figure \@ref(fig:trendseasoninflate) shows what happens when the time series exhibits a trend, a seasonality and a period inflation. The smoothing parameters are $\alpha$ = $`r persistence3[1]`$, $\beta$ = $`r persistence3[2]`$, $\gamma$ = $`r persistence3[3]`$. Notice the "bumps" in level and trend. Since model seaonality has a fixed period by definition and the actual data does not, the model has compensated by setting up a seasonality with the average period of the time series. The bumps are essentially compensations to *push down* or *pull up* the model values to match up with the data values as they move in and out of sync. This is supported by the fact that the bumps become smaller towards the center of the series, where the model seasonality is in sync with the actual data. 
 
@@ -145,13 +145,13 @@ data.es <- es(data.ts, model = 'AAA')
 persistence <- data.es$persistence
 ```
 
-Since there isn't any discernable ampltitude change in Figure \@ref(ref:atlanta), an additive model is chosen for the seasonality component. An AAA triple smoothing model is constructed on the actual temperature data. The smoothing parameters are $\alpha$ = $`r persistence[1]`$, $\beta$ = $`r persistence[2]`$, $\gamma$ = $`r persistence[3]`$. Figure \@(ref:tempscomp) shows the time series components. 
+Since there isn't any discernible ampltitude change in Figure \@ref(ref:atlanta), an additive model is chosen for the seasonality component. An AAA triple smoothing model is constructed on the actual temperature data. The smoothing parameters are $\alpha$ = $`r persistence[1]`$, $\beta$ = $`r persistence[2]`$, $\gamma$ = $`r persistence[3]`$. Figure \@(ref:tempscomp) shows the time series components. 
 
-```{r tempscomp, fig.cap = 'Time series components of Atlanta Summer Temperatures (1996 - 2015)'}
-plot(data.es$states, main = 'Time Series Components')
+```{r tempscomp, fig.cap = 'Time series components of Atlanta summer temperatures.'}
+plot(data.es$states, main = 'Time Series Components', xlab = 'Time Index')
 ```
 
-Interestingly there is a bit of negative trend in the beginning. However it quickly goes back to roughly 0 and does not exhibit the characteristic "bumps" as in the case with simulated period inflation data. The elephant in the room, the level component of the time series looks quite noisy and perhaps can be argued to exhibit some sort of cycles. However it does not show a relatively straight center as expected if the seasonality is indeed using the average period of the time series and the period of the level cycles seems longer than the seasonality. Comparing to the effects shown using simulated data, the Atlanta summer periods have not become longer and there is no clear long term increase in Atlanta summer temperatures, either.
+Interestingly there is a bit of negative trend in the beginning. However it quickly goes back to roughly 0 and does not exhibit the characteristic "bumps" as in the case with simulated period inflation data. The elephant in the room, the level component of the time series looks quite noisy and perhaps can be argued to exhibit some sort of periodicity. However its period does not seem to fixed nor does it correspond to the period of the seasonality. It also lacks a relatively straight center as expected if the seasonality is indeed using the average period of a time series an inflating period. Comparing to the effects shown using simulated data, the Atlanta summer periods have not become longer and there is no clear long term increase in Atlanta summer temperatures, either.
 
 \pagebreak
 
