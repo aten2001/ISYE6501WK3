@@ -103,7 +103,7 @@ data.inflate_trend <- data.inflate_trend + trend + noise
 data.trend <- data.trend + trend + noise
 ```
 
-`es()` from the `smooth` package is used to construct triple exponential smoothing models on the three time series. Although we learned the Additive, Additive, Multiplicative model in class, since the ampltitude of the seasonality is fairly constant an Additive, Additive, Additive (AAA) model is used. The resulting models and the corresponding time series can be found in the [Appendix](#TS). 
+`es()` from the `smooth` package is used to construct triple exponential smoothing models on the three time series. Although we learned the Additive, Additive, Multiplicative model in class, since the ampltitude of the seasonality is fairly constant the more appropriate Additive, Additive, Additive (AAA) model is used. The resulting models and the corresponding time series can be found in the [Appendix](#TS). 
 
 ```{r, fig.show = 'hide'}
 ts.inflate <- ts(data.inflate, frequency = 123)
