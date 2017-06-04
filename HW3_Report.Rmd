@@ -1,40 +1,159 @@
 ---
 title: "ISYE6501 HW3"
 author: "Keh-Harng Feng"
-date: "May 29, 2017"
+date: "June 4, 2017"
 output: 
-  bookdown::html_document2:
+  bookdown::pdf_book:
     fig_caption: TRUE
     toc: FALSE
 urlcolor: blue
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, tidy = TRUE, cache = TRUE)
-options(digits = 4)
-
+library('knitr')
+library('smooth')
 library('caret')
 library('corrplot')
 library('reshape2')
 library('gtools')
 library('parallel')
+
+opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, tidy = TRUE, cache = TRUE)
+options(digits = 4)
 ```
 
 ## Preface
-This is a reproducible report with most of the codes doing the heavy lifting hidden in the background. **All codes are available to be audited.** If you wish to check the various scripts and code snippets used for the computations, you can download the source code of the report by [clicking here](https://github.com/fengkehh/ISYE6501WK3/blob/master/HW3_Report.Rmd). However, as a general rule of thumb you should NOT run any downloaded R scripts from an untrusted source on your computer without understanding the source code first.
+This is a reproducible report with most of the codes doing the heavy lifting hidden in the background. **All codes are available to be audited.** If you wish to check the various scripts and code snippets used for the computations, you can download the source code of the report by [clicking here](https://github.com/fengkehh/ISYE6501WK3/blob/master/HW3_Report.Rmd). The code used in this report requires a processor capable of running 4 processing threads and a decent amount of RAM (8 GB should be fine) due to the use of parallel computation in Q4. As a general rule of thumb you should NOT run any downloaded R scripts from an untrusted source on your computer without understanding the source code first.
 
 # Question 1
 **Describe a situation or problem from your job, everyday life, current events, etc., for which exponential smoothing would be appropriate. What data would you need? Would you expect the value of $\alpha$ (the first smoothing parameter) to be closer to 0 or 1, and why?**
 
-I worked on a computer model that simulates the transfer of radiation through the atmosphere. Clearly the amount of radiation that reaches the surface will depend on things such as the incident angle and the amount of radiation that reaches the top of the atmosphere. The current incident angle can be computed based on the orbital characteristics between the Earth and the Sun. However, the exact amount of energy outputted by the sun is highly dependent on solar activities and is not a simple task to model using physics. If data is lacking for a particular period of interest we can use exponential smoothing to produce an estimation. 
+I worked on a computer model that simulates the transfer of radiation through the atmosphere. One of the factors that control the amount of radiation that reaches the surface is not suprisingly, the amount of radiation that enters the top of the atmosphere. However, the exact amount of energy outputted by the sun is highly dependent on solar activities. Usually the variation is small enough to be ignored. However if one is to be pendantic and data is lacking for a particular period of interest we can use exponential smoothing to produce an estimation. 
 
-Data required would be the measured top of the atmosphere solar irradiance in $W/m^2$ set at a reference distance at a fixed time step size. Note that the Earth's orbit is not circular and thus the distance between the Earth and the Sun will change constantly. Nevertheless it is very easy to work backwards to compute the irradiance at a reference distance by knowing the exact spot Earth and the measuring satellite are at currently and assuming isotropic radiation from the Sun. 
+Data required would be the measured top of the atmosphere solar irradiance in $W/m^2$ set at a reference distance at a fixed time step size. Note that the Earth's orbit around the Sun is not circular and thus the distance between the Earth and the Sun will change constantly. Nevertheless it is very easy to work backwards to compute the irradiance at a reference distance by knowing the exact spot Earth and the measuring satellite are at currently and assuming isotropic radiation from the Sun. 
 
-Judging by [this chart](https://smd-prod.s3.amazonaws.com/science-red/s3fs-public/mnt/medialibrary/2013/01/08/tsi_composite_strip.jpg) there is some form of seasonality on the time scale of decades. If data is measured monthly it would be best to set $\alpha$ to a  small number since the time scale that is really of interest is much larger than the time step.
+Judging by [this chart](https://smd-prod.s3.amazonaws.com/science-red/s3fs-public/mnt/medialibrary/2013/01/08/tsi_composite_strip.jpg) there is some sort of seasonality on the time scale of decades. If data is measured monthly it would be best to set $\alpha$ to a small number since the time scale that is really of interest is much larger than the time step.
 
 # Question 2
 **Using the 20 years of daily high temperature data for Atlanta (July through October) from Homework 2 Question 5, build and use an exponential smoothing model to help make a judgment of whether the unofficial end of summer has gotten later over the 20 years. (Part of the point of this assignment is for you to think about how you might use exponential smoothing to answer this question.) Note: in R, you can use either HoltWinters (simpler to use) or the smooth package’s es function (harder to use, but more general). If you use es, the Holt-Winters model uses model=”AAM” in the function call (the first and second constants are used “A”dditively, and the third (seasonality) is used “M”ultiplicatively; the documentation doesn’t make that clear).**
 
+## Data Preparation
+```{r}
+q2_data <- read.table('temps.txt', header = TRUE)
+data.long <- melt(q2_data[,2:21])
 
+data.ts <- ts(data.long[,2], frequency = 123)
+```
+
+The original data consists of recorded daily temperatures from July 1 to October 31 from the year 1996 to 2015. Each year is separated into a different column and each row represents measurement from a particular day in a particular month. This results in 123 measurements for each annual observation. The original data is thus melted into a long format and converted to a time-series with a frequency of 123 measurements per observation. The time series is shown in Figure \@ref(fig:atlanta)
+
+```{r atlanta, fig.cap = 'Summer Temperature in Atlanta from 1996 to 2015'}
+plot(data.ts, title = 'Atlanta Summer Temperature (1996 - 2015)', xlab = 'Days Since June 30', ylab = 'Temperature (F)')
+```
+
+## Study using Simulated Data
+Judging from the wording of the question and common sense, if there is detectable long term warming in Atlanta summertime it should manifest itself in a combination of the following ways:
+
+1. Positive trend (long term increasing temperature).
+
+2. Period inflation (summer periods become longer).
+
+To figure out what kind of effect should be expected a study is carried out using simulated data. The data sets are constructed as the positive halves of a noisy sine wave sampled at 123 points per cycle repeated 20 times with three different combinations of the following additional effects:
+
+1. A linear trend going from 0 to 5 over the entire 20 cycles.
+
+2. A period inflation going from 0% to 100% inflation (ie: double the period) over the 20 cycles.
+
+
+```{r simulation}
+P = 123
+
+t = 1:123
+
+y = rep(1:20)
+
+data.inflate <- rep(0, 123*20)
+data.normal <- rep(0, 123*20)
+data.inflate_trend <- rep(0, 123*20)
+data.trend <- rep(0, 123*20)
+
+trend <- seq(from = 0, to = 5, length.out = length(data.normal))
+
+sin_gen <- function(t, P_inflate = FALSE) {
+    if (P_inflate) {
+        val <- max(0, sin(2*pi/(P + 1/19*P*(y - 1))*t))
+    } else {
+        val <- max(0, sin(2*pi/(P)*t))
+    }
+    return(val)
+}
+
+for (y in 1:20) {
+    start <- 123*(y-1) + 1
+    data.inflate[start:(start + 122)] = sapply(t, FUN = sin_gen, P_inflate = TRUE)
+    data.inflate_trend[start:(start+122)] = sapply(t, FUN = sin_gen, P_inflate = TRUE)
+    data.trend[start:(start+122)] = sapply(t, FUN = sin_gen, P_inflate = FALSE)
+}
+
+set.seed(123)
+noise <- runif(length(data.normal), min = -0.5, max = 0.5)
+
+data.inflate <- data.inflate + noise
+data.normal <- data.normal + noise + trend
+data.inflate_trend <- data.inflate_trend + trend + noise
+data.trend <- data.trend + trend + noise
+```
+
+`es()` from the `smooth` package is used to construct triple exponential smoothing models on the three time series. Although we learned the Additive, Additive, Multiplicative model in class, since the ampltitude of the seasonality is fairly constant an Additive, Additive, Additive (AAA) model is used. The resulting models and the corresponding time series can be found in the [Appendix](#TS). 
+
+```{r, fig.show = 'hide'}
+ts.inflate <- ts(data.inflate, frequency = 123)
+ts.normal <- ts(data.normal, frequency = 123)
+ts.inflate_trend <- ts(data.inflate_trend, frequency = 123)
+ts.trend <- ts(data.trend, frequency = 123)
+
+normal_trend.es <- es(ts.normal, model = 'AAA')
+normal_trend_plot <- recordPlot()
+inflate_trend.es <- es(ts.inflate_trend, model = 'AAA')
+inflate_trend_plot <- recordPlot()
+trend.es <- es(ts.trend, model = 'AAA')
+trend_plot <- recordPlot()
+
+plot(normal_trend.es$states, main = 'Trend Only')
+component1 <- recordPlot()
+persistence1 <- normal_trend.es$persistence
+
+plot(trend.es$states, main = 'Trend + Season')
+component2 <- recordPlot()
+persistence2 <- trend.es$persistence
+
+plot(inflate_trend.es$states, main = 'Trend + Season + Period Inflation')
+component3 <- recordPlot()
+persistence3 <- trend.es$persistence
+```
+
+Figure \@ref(fig:trendonly) shows the model components on where there is a positive trend but no seasonality (scroll UP after clicking the reference link). The smoothing parameters are $\alpha$ = $`r persistence1[1]`$, $\beta$ = $`r persistence1[2]`$, $\gamma$ = $`r persistence1[3]`$. Interestingly, the AAA model failed to decompose the linear trend into the trend component. Instead it is reflected in the time series level (the moving average). 
+
+Figure \@ref(fig:trendseason) shows the component plot for a series with both trend and season. Once again. Trend is picked up by the moving average level. Seasonality is correctly decomposed however. The smoothing parameters are $\alpha$ = $`r persistence2[1]`$, $\beta$ = $`r persistence2[2]`$, $\gamma$ = $`r persistence2[3]`$.
+
+Finally, Figure \@ref(fig:trendseasoninflate) shows what happens when the time series exhibits a trend, a seasonality and a period inflation. The smoothing parameters are $\alpha$ = $`r persistence3[1]`$, $\beta$ = $`r persistence3[2]`$, $\gamma$ = $`r persistence3[3]`$. Notice the "bumps" in level and trend. Since model seaonality has a fixed period by definition and the actual data does not, the model has compensated by setting up a seasonality with the average period of the time series. The bumps are essentially compensations to *push down* or *pull up* the model values to match up with the data values as they move in and out of sync. This is supported by the fact that the bumps become smaller towards the center of the series, where the model seasonality is in sync with the actual data. 
+
+If the data indeed contains some form of period inflation and/or trend, it seems that the level component will provide the most direct visual cues. The actual temperature data is now ready to be analyzed.
+
+## Data Analysis
+```{r, fig.show = 'hide'}
+data.es <- es(data.ts, model = 'AAA')
+persistence <- data.es$persistence
+```
+
+Since there isn't any discernable ampltitude change in Figure \@ref(ref:atlanta), an additive model is chosen for the seasonality component. An AAA triple smoothing model is constructed on the actual temperature data. The smoothing parameters are $\alpha$ = $`r persistence[1]`$, $\beta$ = $`r persistence[2]`$, $\gamma$ = $`r persistence[3]`$. Figure \@(ref:tempscomp) shows the time series components. 
+
+```{r tempscomp, fig.cap = 'Time series components of Atlanta Summer Temperatures (1996 - 2015)'}
+plot(data.es$states, main = 'Time Series Components')
+```
+
+Interestingly there is a bit of negative trend in the beginning. However it quickly goes back to roughly 0 and does not exhibit the characteristic "bumps" as in the case with simulated period inflation data. The elephant in the room, the level component of the time series looks quite noisy and perhaps can be argued to exhibit some sort of cycles. However it does not show a relatively straight center as expected if the seasonality is indeed using the average period of the time series and the period of the level cycles seems longer than the seasonality. Comparing to the effects shown using simulated data, the Atlanta summer periods have not become longer and there is no clear long term increase in Atlanta summer temperatures, either.
+
+\pagebreak
 
 # Question 3
 **Describe a situation or problem from your job, everyday life, current events, etc., for which a linear regression model would be appropriate. List some (up to 5) predictors that you might use.**
@@ -59,10 +178,6 @@ Hypothesis test carried out on model coefficients showed that transmission is NO
 
 ## Data Preprocess & Exploratory Analysis
 
-TODO: Strategy -- show there are no near zero variance predictors. Show pair matrix plot. Show strong correlation between P01 and P02 using corrPlot. Use findCorrelation to identify P01 as the predictor to be removed (reference Kuhn for algorithm). 
-
-Scale & center.
-
 The data is loaded with header. The first 5 rows are shown below:
 
 ```{r}
@@ -86,14 +201,7 @@ nzv <- nearZeroVar(data.predictors, saveMetrics = TRUE)
 nzv
 ```
 
-Figure \@ref(fig:pairsplot) shows the Pair-wise scatter plots between all predictors. There seems to be colinearity between `Po1` and `Po2`. Some other predictor pairs are also suspect such as `Ed` and `Wealth`, `Wealth` and `Ineq`, `Po1` and `Wealth`, and finally `Po2` and `Wealth`. A plot of the correlations between all *non-categorical* predictors is shown in Figure \@ref(fig:corrplot).
-
-```{r pairsplot, fig.cap = 'Pair scatterplot matrix of all the predictors. Matrix is symmetric by design.'}
-
-pairs(data.predictors)
-
-```
-
+A plot of the correlations between all *non-categorical* predictors is shown in Figure \@ref(fig:corrplot).
 
 ```{r corrplot, fig.cap = 'Cluster plot of the correlation matrix. Matrix is symmetric by design.'}
 data.noncat <- data.predictors[,!(names(data.predictors) %in% c('So'))]
@@ -102,7 +210,7 @@ corrmat <- correlations <- cor(data.noncat)
 corrplot(corrmat, order = 'hclust')
 ```
 
-As suspected, Figure \@ref(fig:corrplot) shows strong correlations between (`Po1`, `Po2`), (`Ineq`, `Wealth`) and (`Ineq`, `Ed`). The following algorithm described by Kuhn and Johnson in [Applied Predictive Modeling](appliedpredictivemodeling.com) in the form of the `findCorrelations()` function from the `caret` package is used to identify highly colinear predictors to be removed:
+Strong correlations can be seen between (`Po1`, `Po2`), (`Ineq`, `Wealth`) and (`Ineq`, `Ed`). The following algorithm described by Kuhn and Johnson in [Applied Predictive Modeling](appliedpredictivemodeling.com) in the form of the `findCorrelations()` function from the `caret` package is used to identify highly colinear predictors to be removed:
 
 > 1. Calculate the correlation matrix.
 > 2. Determine the two predictors associated with the largest absolute parwise correlations, (A, B).
@@ -127,25 +235,26 @@ densityplot(~value|variable, data = melted.noncat, scales = list(x = list(relati
 
 Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. The predictors are transformed using Box-Cox transformation then centered and scaled[^1] in an attempt to fix this. The result of the transformation is shown in Figure \@ref(fig:transformed).
 
-[^1]: It is my belief that the order of transformation is correlation removal -> Box-Cox -> center/scale (either one can go first). The key here is that Box-Cox **must** be carried out before centering and scaling because it involves the possibility of raising the predictors to negative powers. If you center and scale first you can run into division by 0 even if the predictor doesn't originally contain 0. If the predictor already has 0 you cannot use Box-Cox transformation.
+[^1]: The order of transformation is correlation removal -> Box-Cox -> center/scale (either one can go first). The key here is that Box-Cox **must** be carried out before centering and scaling because it involves the possibility of raising the predictors to negative powers. If you center and scale first you run the risk of dividing by 0 even if the predictor doesn't originally contain 0. If the predictor already has 0 you cannot use Box-Cox transformation at all.
 
-```{r transformed, fig.cap = 'Transformed predictor density plots. Transformations applied: center, scale and Yeo-Johnson (plus removal of highly colinear predictor).'}
-#data.dummy <- as.data.frame(cbind(model.matrix(Crime ~ ., data = q5_data), Crime = q5_data$Crime))
+```{r transformed, fig.cap = 'Transformed predictor density plots. Pre-processing applied: high colinearity removal, Box-Cox transformation, centering and normalization.'}
 
-#data.dummy <- as.data.frame(model.matrix(Crime ~ ., data = q5_data))
+removeCorr <- preProcess(data.predictors, method = c('corr'))
 
-preproc <- preProcess(data.noncat, method = c('center', 'scale', 'BoxCox', 'corr'))
+transform <- preProcess(predict(removeCorr, data.predictors), method = c('center', 'scale', 'BoxCox'))
+#preproc <- preProcess(data.predictors, method = c('center', 'scale', 'BoxCox'))
 
-data.processed <- predict(preproc, data.noncat)
+data.processed <- predict(transform, predict(removeCorr, data.predictors))
 
 melted.processed <- melt(data.processed)
 densityplot(~value|variable, data = melted.processed, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
 ```
 
-With the exception of `M.F` the improvement to the predictor distribution is quite remarkable. This set of transformations shall be used with the addition of the categorical predictor `So` prior to automatic feature selection.
+With the exception of `M.F` the improvement to the predictor distribution is quite remarkable. This set of transformations shall be used prior to automatic feature selection.
 
 ## Automatic Feature Selection
 ```{r feature-select}
+set.seed(1)
 var_combo <- permutations(2, 14, v = c(TRUE, FALSE), repeats.allowed = TRUE)[-1,]
 
 combo_list <- as.list(as.data.frame(t(var_combo)))
@@ -155,9 +264,6 @@ combo_list <- as.list(as.data.frame(t(var_combo)))
 n <- nrow(q5_data)
 
 inTrain <- sample(1:n, size = ceiling(n*0.9))
-
-# Include So in processed predictors.
-data.processed <- data.frame(data.processed, So = data.predictors$So)
 
 # Include Response with processed predictors.
 all.processed <- data.frame(data.processed, Crime = q5_data$Crime)
@@ -197,38 +303,99 @@ cl <- makePSOCKcluster(4)
 mse_est <- parSapply(cl = cl, X = combo_list, FUN = cv_mse, data = data.training, variables = varnames, folds = folds)
 
 stopCluster(cl)
-# for (comb_ind in 1:length(var_combo)) {
-#     formula = as.formula(paste('Crime ~ ', paste(varnames[var_combo[comb_ind,]], collapse = ' + '), sep = ''))
-#     
-#     
-#     combo_mse <- rep(0, 10)
-#     for (fold_ind in 1:10) {
-#         training <- data.training[-folds[[fold_ind]],]
-#         validation <- data.training[folds[[fold_ind]],]
-#         
-#         model <- lm(formula, data = training)
-#         
-#         pred <- predict(model, validation[, !(names(validation) %in% c('Crime'))])
-#         
-#         combo_mse[fold_ind] <- mse(validation$Crime, pred)
-#     }
-#     
-#     mse_est[comb_ind] <- mean(combo_mse)
-# }
 
 min_ind <- which.min(mse_est)
 
-mse_est[min_ind]
-names(data.training)[var_combo[min_ind,]]
-
+min_mse <- mse_est[min_ind]
+selected_predictors <- varnames[var_combo[min_ind,]]
 ```
 
-The preprocessed data is now split into a test (~10%) & training set (~90%). With 14 predictors (13 preprocessed numerical predictors + `So`), the number of predictor combinations is `r nrow(var_combo) - 1` (the trivial combination where no predictor is selected is not included). An exhaustive search over the entire combination space is carried out. 10-fold cross-validation on the training data with the average of MSE from the model prediction on the validation fold is used to estimate out-of-sample accuracy. The predictor combination that results in the the lowest out-of-sample accuracy estimate is selected.
+The preprocessed data is now split into a test (~10%) & training set (~90%). Feature selection is done with a rather stupid approach: an exhaustive search over the entire combination space is carried out. With 14 predictors that's $`r nrow(var_combo) - 1`$ possible combinations (the trivial combination of no predictors selected is not included). Parallel processing with four PSOCK clusters is utilized to carry out 10-fold cross-validation on the training set. The average MSE from the model prediction on the validation fold is used to estimate out-of-sample performance. The predictor combination that results in the lowest out-of-sample MSE estimate is selected. The final selected combination is `r selected_predictors`.
 
 ## Performance Evaluation
 
-Retrain using full training set. Compute prediction on test set & show R^2 or MSE.
+A MLR model is retrained using the selected predictor combination using the entire training set. Model statistics are shown below:
+
+```{r}
+formula <- paste('Crime ~ ', paste(selected_predictors, collapse = ' + '), sep = '')
+
+final_model <- lm(formula, data = data.training)
+
+summary(final_model)
+```
+
+All selected predictors display excellent P values, as expected from exhaustive feature selection. From the adjusted R^2 value the model explains about `r summary(final_model)$adj.r.squared*100`% of the variance in training set response. Residual plots are shown in Figure \@ref(fig:resid). It can be seen that the residuals spread around the mean at 0 and exhibit a normal distribution and constant variance. The residuals furthest away from 0 also have low leverage, therefore no significant effects from potential outliers. Qualitatively, there does not seem to be any problems.
+
+```{r resid, fig.cap = 'Residual plots of final model.'}
+par(mfrow = c(2, 2))
+plot(final_model)
+```
+
+The performance of the model on the test set is visualized in Figure \@ref(fig:testset)
+
+```{r testset, fig.cap = 'Labeled Response Values vs Model Fitted Values (Training + Test)'}
+
+data_ind <- 1:n
+
+test_pred <- predict(final_model, newdata = data.test[,-15])
+
+plot(data.test[,15], pch = 'o', col = 'red')
+points(test_pred, pch = 'x', col = 'red')
+legend('top', col = c('red', 'red'), pch = c('o', 'x'), legend = c('Test Set Response', 'Fitted Test Set Response'))
+
+test_mse <- ModelMetrics::mse(data.test[,15], test_pred)
+
+```
+
+The MSE of the final model on the test set is $`r test_mse`$. Compared to the MSE achieved on the training set, $`r ModelMetrics::mse(final_model$fitted.values, data.training[,15])`$, it is surprisingly better! This could be caused by how small the sample is and me getting lucky with the test set chosen. In general, out-of-sample performance is almost always worse than in-sample performance.
 
 ## Prediction
+A new data point is set at 
+```{r}
+data.predict <- data.frame(M = 14, So = 0, Ed = 10, Po1 = 12, Po2 = 15.5, LF = 0.64, M.F = 94, Pop = 150, NW = 1.1, U1 = 0.12, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.04, Time = 39.0)
 
-Make prediction using specified predictor values.
+data.predict.processed <- predict(transform, predict(removeCorr, data.predict))
+
+new_pred <- predict(final_model, newdata = data.predict.processed, interval = 'predict')
+
+predint <- c(new_pred[2], new_pred[3])
+
+data.predict
+```
+
+With these predictor values the model predicts a crime rate of `r new_pred[1]` with a prediction interval of `r predint[1]` to `r predint[2]` (95% confidence).
+
+**Digression:** I used this question as a chance to do a bit of feature engineering and get a sense on how to pre-process data effciently in R. It should be noted that exhaustive search with CV on the training set can cause overfitting on the data (although if you didn't do feature selection, you **definitely** overfitted). Ideally feature selection should be performed on a different dataset than the one used for training the model. However the given sample size is simply too small for this to be feasible. Regularization methods such as lasso regression may be a better choice in selecting the optimal features.
+
+# Appendix
+
+## Simulated Time Series{#TS}
+
+```{r, fig.cap = 'Trend Only'}
+replayPlot(normal_trend_plot)
+```
+
+```{r trendonly, fig.cap = 'Time series components with only trend (no seasonality).'}
+replayPlot(component1)
+```
+
+```{r, fig.cap = 'Trend + Season'}
+replayPlot(trend_plot)
+```
+
+```{r trendseason, fig.cap = 'Time series components with trend and season (no period inflation'}
+replayPlot(component2)
+```
+
+```{r, fig.cap = 'Trend + Season + Period Inflation'}
+replayPlot(inflate_trend_plot)
+```
+
+```{r trendseasoninflate, fig.cap = 'Time series components with trend, seasonality and period inflation.'}
+replayPlot(component3)
+```
+
+
+
+
+
