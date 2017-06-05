@@ -324,7 +324,7 @@ final_model <- lm(formula, data = data.training)
 summary(final_model)
 ```
 
-All selected predictors display excellent P values, as expected from exhaustive feature selection. From the adjusted R^2 value the model explains about `r summary(final_model)$adj.r.squared*100`% of the variance in training set response. Residual plots are shown in Figure \@ref(fig:resid). It can be seen that the residuals spread around the mean at 0 and exhibit a normal distribution and constant variance. The residuals furthest away from 0 also have low leverage, therefore no significant effects from potential outliers. Qualitatively, there does not seem to be any problems.
+All selected predictors display excellent P values, as expected from exhaustive feature selection. From the adjusted R^2 value the model explains about `r summary(final_model)$adj.r.squared*100`% of the variance in training set response. Residual plots are shown in Figure \@ref(fig:resid). It can be seen that the residuals spread around the mean at 0 and exhibit a normal distribution and constant variance. The residuals furthest away from 0 also have low leverage, therefore there are no significant effects from potential outliers. Qualitatively, there does not seem to be any problems.
 
 ```{r resid, fig.cap = 'Residual plots of final model.'}
 par(mfrow = c(2, 2))
