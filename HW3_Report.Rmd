@@ -365,7 +365,7 @@ data.predict
 
 With these predictor values the model predicts a crime rate of `r new_pred[1]` with a prediction interval of `r predint[1]` to `r predint[2]` (95% confidence).
 
-**Digression:** I used this question as a chance to do a bit of feature engineering and get a sense on how to pre-process data effciently in R. It should be noted that exhaustive search with CV on the training set can cause overfitting on the data (although if you didn't do feature selection, you **definitely** overfitted). Ideally feature selection should be performed on a different dataset than the one used for training the model. However the given sample size is simply too small for this to be feasible. Regularization methods such as lasso regression may be a better choice in selecting the optimal features.
+**Digression:** I used this question as a chance to do a bit of feature selection and get a sense on how to pre-process data effciently in R. It should be noted that exhaustive search with CV on the training set can cause overfitting on the data (although if you didn't do feature selection, you **definitely** overfitted). Ideally feature selection should be performed on a different dataset than the one used for training the model. However the given sample size is simply too small for this to be feasible. Regularization methods such as lasso regression may be a better choice in selecting the optimal features.
 
 # Appendix
 
