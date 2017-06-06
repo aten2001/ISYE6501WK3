@@ -242,7 +242,6 @@ Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `
 removeCorr <- preProcess(data.predictors, method = c('corr'))
 
 transform <- preProcess(predict(removeCorr, data.predictors), method = c('center', 'scale', 'BoxCox'))
-#preproc <- preProcess(data.predictors, method = c('center', 'scale', 'BoxCox'))
 
 data.processed <- predict(transform, predict(removeCorr, data.predictors))
 
@@ -310,7 +309,7 @@ min_mse <- mse_est[min_ind]
 selected_predictors <- varnames[var_combo[min_ind,]]
 ```
 
-The preprocessed data is now split into a test (~10%) & training set (~90%). Feature selection is done with a rather stupid approach: an exhaustive search over the entire combination space is carried out. With 14 predictors that's $`r nrow(var_combo) - 1`$ possible combinations (the trivial combination of no predictors selected is not included). Parallel processing with four PSOCK clusters is utilized to carry out 10-fold cross-validation on the training set. The average MSE from the model prediction on the validation fold is used to estimate out-of-sample performance. The predictor combination that results in the lowest out-of-sample MSE estimate is selected. The final selected combination is `r selected_predictors`.
+The preprocessed data is now split into a test (~10%) & training set (~90%). Feature selection is done with a rather stupid approach: an exhaustive search over the entire combination space is carried out. With 14 predictors that's $`r nrow(var_combo) - 1`$ possible combinations (the trivial combination of no predictors selected is not included). Parallel processing with four PSOCK clusters is utilized to carry out 10-fold cross-validation on the training set. The average MSE from the model prediction on the validation folds is used to estimate out-of-sample performance. The predictor combination that results in the lowest out-of-sample MSE estimate is selected. The final selected combination is `r selected_predictors`.
 
 ## Performance Evaluation
 
