@@ -233,9 +233,9 @@ melted.noncat <- melt(data.noncat[,!(names(data.noncat) %in% c(tbr))])
 densityplot(~value|variable, data = melted.noncat, scales = list(x = list(relation = 'free'), y = list(relation = 'free')), adjust = 1.25, pch = '|', xlab = 'Predictor')
 ```
 
-Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. The predictors are transformed using Box-Cox transformation then centered and scaled[^1] in an attempt to fix this. The result of the transformation is shown in Figure \@ref(fig:transformed).
+Some of the predictors exihibit right skew, in particular `Prob`, `Pop`, `NW`, `U1`, `U2`, `M`, `Po2` and `M.F`. `Wealth` exhibits left skew. To improve predictor symmetry they are transformed using Box-Cox transformation then centered and scaled[^1]. The result of the transformation is shown in Figure \@ref(fig:transformed).
 
-[^1]: The order of transformation is correlation removal -> Box-Cox -> center/scale (either one can go first). The key here is that Box-Cox **must** be carried out before centering and scaling because it involves the possibility of raising the predictors to negative powers. If you center and scale first you run the risk of dividing by 0 even if the predictor doesn't originally contain 0. If the predictor already has 0 you cannot use Box-Cox transformation at all.
+[^1]: The order of transformation is correlation removal -> Box-Cox -> center/scale (either one can go first). The key here is that Box-Cox **must** be carried out before centering and scaling because it involves raising the predictors to different (and possibly negative) powers. Negative numbers can cause a bimodal dispersion due to the sign of the number. If the power is negative and you center and scale first the predictor will contain negative values and you may possibly divide by 0! If the predictor already has 0 or negative values you can apply a positive translation before Box-Cox.
 
 ```{r transformed, fig.cap = 'Transformed predictor density plots. Pre-processing applied: high colinearity removal, Box-Cox transformation, centering and normalization.'}
 
